@@ -1,0 +1,85 @@
+// import Tezos = Tezos.Next;
+
+export type storage = {
+  messages: map<address, string>,
+  feedback: string,
+  ticketOwnership: map<address, ticket<string>>
+};
+
+type return_type = [list<operation>, storage];
+
+type returned_feedback = [address, string];
+type poke_param = contract<returned_feedback>;
+
+export namespace PokeGame {
+
+  // Simple poke with no message
+  @entry
+  const poke = (_: unit, storage: storage): return_type => {
+    const { messages, feedback, ticketOwnership } = storage;
+    const newMessages = Map.add(Tezos.get_sender(), "", messages);
+    return [[], {
+      messages: newMessages,
+      feedback: feedback,
+      ticketOwnership: ticketOwnership,
+    }];
+  }
+
+  // Poke with message
+  @entry
+  const pokeWithMessage = (message: string, storage: storage): return_type => {
+    const { messages, feedback, ticketOwnership } = storage;
+    const newMessages = Map.add(Tezos.get_sender(), message, messages);
+    return [[], {
+      messages: newMessages,
+      feedback: feedback,
+      ticketOwnership: ticketOwnership,
+    }];
+  }
+
+  @entry
+  const pokeAndGetFeedback = (targetAddress: address, storage: storage): return_type => {
+    const { messages, feedback, ticketOwnership } = storage;
+
+    // Require a ticket to poke another contract
+    // const [three, map_without_3] = Map.get_and_update(3, None(), map_with_3);
+    const [userTicketOpt, newTicketOwnership] = Map.get_and_update(Tezos.get_sender(), None(), ticketOwnership);
+
+    match(userTicketOpt) {
+      when(None): failwith("Ticket required");
+      when(Some(_userTicket)): do {
+        // Consume ticket by not putting it in storage
+        // Read the feedback view
+        const responseOpt: option<string> = Tezos.call_view("feedback", unit, targetAddress);
+        const response: string = Option.value_with_error("Failed to get response from view", responseOpt);
+        const newMessages: map<address, string> = Map.add(targetAddress, response, messages);
+        return [[], {
+          messages: newMessages,
+          feedback: feedback,
+          ticketOwnership: newTicketOwnership,
+        }];
+      }
+    }
+  };
+
+  @view
+  export const feedback = (_: unit, storage: storage): string => { return storage.feedback };
+
+  // Create a ticket that allows a user to use this contract to poke another contract
+  // If the address already has a ticket, it is overwritten
+  @entry
+  const createTicket = (ticketOwner: address, storage: storage): return_type => {
+    const { messages, feedback, ticketOwnership } = storage;
+    const newTicket: ticket<string> = Option.value_with_error(
+      "Failed to create ticket",
+      Tezos.Next.Ticket.create("Poke permission", 1n)
+    );
+    const newTicketOwnership = Map.update(ticketOwner, Some(newTicket), ticketOwnership);
+    return [[], {
+      messages: messages,
+      feedback: feedback,
+      ticketOwnership: newTicketOwnership,
+    }];
+  }
+
+}

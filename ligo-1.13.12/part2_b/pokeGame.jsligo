@@ -1,0 +1,111 @@
+// import Tezos = Tezos.Next;
+
+export type storage = {
+  messages: map<address, string>,
+  feedback: string
+};
+
+type return_type = [list<operation>, storage];
+
+type returned_feedback = [address, string];
+type poke_param = contract<returned_feedback>;
+
+export namespace PokeGame {
+
+  // Simple poke with no message
+  @entry
+  const poke = (_: unit, storage: storage): return_type =>
+    [
+      [],
+      {
+        ...storage,
+        messages: Map.add(Tezos.get_sender(), "", storage.messages),
+      }
+    ];
+
+  // Poke with message
+  @entry
+  const pokeWithMessage = (message: string, storage: storage): return_type =>
+    [
+      [],
+      {
+        ...storage,
+        messages: Map.add(Tezos.get_sender(), message, storage.messages),
+      }
+    ];
+
+  // Poke a different contract
+  // @entry
+  // const pokeAndGetFeedback = (targetAddress: address, storage: storage): return_type => {
+
+  //   const contract_call = (): contract<poke_param> => {
+  //     return match(
+  //       Tezos.get_entrypoint_opt("%getFeedback", targetAddress) as
+  //         option<contract<poke_param>>
+  //     ) {
+  //       when (None()):
+  //         failwith("Failed to find contract")
+  //       when (Some(contract)):
+  //         contract
+  //     };
+  //   };
+
+  //   const op: operation =
+  //     Tezos.Operation.transaction(
+  //       ((Tezos.self("%pokeAndGetFeedbackCallback") as contract<returned_feedback>)),
+  //       (0 as mutez),
+  //       contract_call()
+  //   );
+  //   return [[op], storage];
+  // };
+
+  // @entry
+  // const getFeedback = (contract_callback: contract<returned_feedback>, storage: storage): return_type => {
+  //     const op: operation = Tezos.Operation.transaction(
+  //         [Tezos.get_self_address(), storage.feedback],
+  //         (0 as mutez),
+  //         contract_callback);
+  //     return [[op] ,storage];
+  // };
+
+  // @entry
+  // const pokeAndGetFeedbackCallback = (feedback: returned_feedback, store: storage): return_type => {
+  //   const [receiver, message] = feedback;
+  //     return [[],
+  //       {
+  //         ...store,
+  //         messages: Map.add(receiver, message, store.messages)
+  //         }
+  //     ];
+  // };
+
+  @entry
+  const pokeAndGetFeedback = (targetAddress: address, storage: storage): return_type => {
+
+    //Read the feedback view
+    const feedbackOpt: option<string> = Tezos.call_view("feedback", unit, targetAddress);
+    match(feedbackOpt) {
+      when (Some(feedback)):
+        do {
+          return [
+            [],
+            {
+              ...storage,
+              messages: Map.add(
+                targetAddress,
+                feedback,
+                storage.messages
+              )
+            }
+          ];
+        }
+      when (None()):
+        failwith("Cannot find view 'feedback' on given address")
+    };
+
+  };
+
+  @view
+  export const feedback = (_: unit, storage: storage): string => { return storage.feedback };
+
+}

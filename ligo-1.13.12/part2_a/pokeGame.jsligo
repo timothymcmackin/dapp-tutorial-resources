@@ -1,0 +1,29 @@
+import Tezos = Tezos.Next;
+
+export type storage = {
+  messages: map<address, string>,
+  feedback: string
+};
+
+type return_type = [list<operation>, storage];
+
+export namespace PokeGame {
+
+  // Simple poke with no message
+  @entry
+  const poke = (_: unit, storage: storage): return_type =>
+    [[], {
+        ...storage,
+        messages: Map.add(Tezos.get_sender(), "", storage.messages),
+      }
+    ];
+
+  // Poke with message
+  @entry
+  const pokeWithMessage = (message: string, storage: storage): return_type =>
+    [[], {
+        ...storage,
+        messages: Map.add(Tezos.get_sender(), message, storage.messages),
+      }
+    ];
+}
